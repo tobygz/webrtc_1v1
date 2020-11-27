@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>Hello world</title>
+<style>
+.button {
+  background-color: #008CBA;
+  border: none;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+}
+</style>
+   </head>
+   
+   <script src = "/socket.io/socket.io.js"></script>
+   <script>
+var pc = null;
+      //var socket = io();
+
+function handleOfferError(err){
+	console.error('Failed to get offer!', err);
+}
+
+function handleError(err){
+	console.error('Failed to get Media Stream!', err);
+}
+var localStream = null;
+var remoteStream = null;
+
+
+function getMediaStream(stream){
+
+	if(localStream){
+		stream.getAudioTracks().forEach((track)=>{
+			localStream.addTrack(track);	
+			stream.removeTrack(track);
+		});
+	}else{
+		localStream = stream;	
+	}
+
+	localVideo.srcObject = localStream;
+	pcConn();
+}
+
+function handleAnswerError(err){
+	console.error('Failed to create answer:', err);
+}
+
+function getAnswer(desc){
+	pc.setLocalDescription(desc);
+	//answer.value = desc.sdp;
+	console.log("getAnswer desc:"+desc);
+
+	//send answer sdp
+	sendMessage(111, desc);
+}
+
+function getOffer(desc){
+	pc.setLocalDescription(desc);
+	//offer.value = desc.sdp;
+	offerdesc = desc;
+
+	console.log("getOffer desc:"+desc);
+	//send offer sdp
+	sendMessage(111, offerdesc);	
+}
+
+function pcConn(){
+	socket = io.connect();
+	socket.on('joined', (roomid, id) => {
+		console.log('receive joined message!', roomid, id);
+		createPeerConnection();
+	});
+
+	socket.on('otherjoin', (roomid) => {
+		console.log('receive otherjoined message!', roomid);
+		createPeerConnection();
+
+		var offerOptions = {
+			offerToRecieveAudio: 1,
+			offerToRecieveVideo: 1
+		}
+
+		pc.createOffer(offerOptions)
+			.then(getOffer)
+			.catch(handleOfferError);
+
+	});
+
+	socket.on('message', (roomid, data) => {
+		//console.log('receive message! roomid:' + roomid +' data:', data);
+
+		if(data === null || data === undefined){
+			console.error('the message is invalid!');
+			return;	
+		}
+
+		if(data.hasOwnProperty('type') && data.type === 'offer') {
+			
+			console.log('receive message offer roomid:' + roomid +' data:', data);
+			//offer.value = data.sdp;
+
+			pc.setRemoteDescription(new RTCSessionDescription(data));
+
+			//create answer
+			pc.createAnswer()
+				.then(getAnswer)
+				.catch(handleAnswerError);
+
+		}else if(data.hasOwnProperty('type') && data.type == 'answer'){
+			console.log('receive message answer roomid:' + roomid +' data:', data);
+			//answer.value = data.sdp;
+			pc.setRemoteDescription(new RTCSessionDescription(data));
+		
+		}else if (data.hasOwnProperty('type') && data.type === 'candidate'){
+			var candidate = new RTCIceCandidate({
+				sdpMLineIndex: data.label,
+				candidate: data.candidate
+			});
+			pc.addIceCandidate(candidate);	
+		
+		}else{
+			console.log('the message is invalid!', data);
+		
+		}
+	
+	});
+
+	socket.emit('join', 111);
+}
+
+var pcConfig = {
+  'iceServers': [{
+    'urls': 'turn:42.193.8.37:3478',
+    'credential': "bbb",
+    'username': "aaa"
+  }]
+};
+
+function sendMessage(roomid, data){
+	console.log('send message to ', roomid, data);
+	if(!socket){
+		console.log('socket is null');
+	}
+	socket.emit('message', roomid, data);
+}
+
+function createPeerConnection(){
+	if(pc){
+		return;
+	}
+	pc = new RTCPeerConnection(pcConfig);
+
+	console.log("createPeerConnection pc:"+pc);
+	pc.onicecandidate = (e)=>{
+
+		if(e.candidate) {
+			console.log("createPeerConnection candidate:"+e.candidate);
+			sendMessage(111, {
+				type: 'candidate',
+				label:event.candidate.sdpMLineIndex, 
+				id:event.candidate.sdpMid, 
+				candidate: event.candidate.candidate
+			});
+		}else{
+			console.log('this is the end candidate');
+		}
+	}
+
+	pc.ontrack = getRemoteStream;
+
+	localStream.getTracks().forEach((track)=>{
+		pc.addTrack(track, localStream);	
+	});
+}
+
+function getRemoteStream(e){
+	console.log('called getRemoteStream:'+e);
+	remoteStream = e.streams[0];
+	remoteVideo.srcObject = e.streams[0];
+}
+
+function startVideo(){
+
+	if(!navigator.mediaDevices ||
+		!navigator.mediaDevices.getUserMedia){
+		console.error('the getUserMedia is not supported!');
+		return;
+	}else {
+
+		var constraints;
+		constraints = {
+			video: true,
+			audio:  {
+				echoCancellation: true,
+				noiseSuppression: true,
+				autoGainControl: true
+			}
+		}
+
+		navigator.mediaDevices.getUserMedia(constraints)
+					.then(getMediaStream)
+					.catch(handleError);
+	}
+
+}
+
+
+   </script>
+   
+
+   <body>
+<div>
+local:
+<video id="localvideo" autoplay controls playsinline muted></video>
+</div>
+<div>
+remote:
+<video id="remotevideo" autoplay controls playsinline muted></video>
+</div>
+<div>
+      <button type = "button" class="button" name = "start" onclick = "startVideo()"> 开始视频</button>
+</div>
+<script>
+
+var localVideo = document.querySelector('video#localvideo');
+var remoteVideo = document.querySelector('video#remotevideo');
+</script>
+   </body>
+</html>
