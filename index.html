@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
    <head>
-      <title>Hello world</title>
+      <title>webrtc_1v1</title>
 <style>
 .button {
   background-color: #008CBA;
@@ -77,6 +77,20 @@ function pcConn(){
 		createPeerConnection();
 	});
 
+	socket.on('leaved', (roomid,id) => {
+		socket.disconnect();
+		if(pc){
+			pc.close();
+			pc = null;
+		}
+
+	});
+	socket.on('bye', (roomid,id) => {
+		if(pc){
+			pc.close();
+			pc = null;
+		}
+	});
 	socket.on('otherjoin', (roomid) => {
 		console.log('receive otherjoined message!', roomid);
 		createPeerConnection();
@@ -185,6 +199,23 @@ function getRemoteStream(e){
 	remoteVideo.srcObject = e.streams[0];
 }
 
+function closeVideo(){
+
+	if(socket){
+		socket.emit('leave',111);
+	}
+
+	if(pc){
+		pc.close();
+		pc = null;
+	}
+
+	if(localStream && localStream.getTracks()){
+		localStream.getTracks().forEach( (track) =>{ track.stop(); });
+	}
+	localStream = null;
+}
+
 function startVideo(){
 
 	if(!navigator.mediaDevices ||
@@ -224,7 +255,8 @@ remote:
 <video id="remotevideo" autoplay controls playsinline muted></video>
 </div>
 <div>
-      <button type = "button" class="button" name = "start" onclick = "startVideo()"> 开始视频</button>
+      <button type = "button" class="button" name = "start" onclick = "startVideo()"> START</button>
+      <button type = "button" class="button" name = "start" onclick = "closeVideo()"> CLOSE</button>
 </div>
 <script>
 

@@ -50,18 +50,27 @@ io.on('connection', function(socket) {
 		userMap.set(socket.id,socket);
 		socket.join(room);
 
-			socket.emit('joined', room, socket.id); 
-			//发给除自己之外的房间内的所有人
-			if(userMap.size> 1){
-				socket.to(room).emit('otherjoin', room, socket.id);
-			}
+		socket.emit('joined', room, socket.id); 
+		//发给除自己之外的房间内的所有人
+		if(userMap.size> 1){
+			socket.to(room).emit('otherjoin', room, socket.id);
+		}
 		//socket.emit('joined', room, socket.id); //发给自己
 		//socket.broadcast.emit('joined', room, socket.id); //发给除自己之外的这个节点上的所有人
 		//io.in(room).emit('joined', room, socket.id); //发给房间内的所有人
 	});
 
+socket.on('leave',(roomid)=>{
+userMap.delete(socket.id);
+//send to other socket, bye
+socket.to(roomid).emit('bye',roomid,socket.id);
+//send to self leaved.
+socket.emit('leaved',roomid,socket.id);
+});
+
 socket.on('disconnect',() =>{
 userMap.delete(socket.id);
+console.log('delete socket id:',socket.id);
 });
 
 
